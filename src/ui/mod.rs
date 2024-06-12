@@ -3,6 +3,7 @@
 use netcanv_renderer::paws::{self, vector, AlignH, AlignV, Color, Layout, Point, Vector};
 use netcanv_renderer::{Font as FontTrait, Image as ImageTrait, RenderBackend};
 
+use crate::backend::winit::keyboard::{Key, NamedKey};
 use crate::backend::{Backend, Font, Image};
 
 mod button;
@@ -192,7 +193,7 @@ pub fn chain_focus(input: &Input, fields: &mut [&mut dyn Focus]) {
 
    let mut had_focus = false;
 
-   match input.action((Modifier::SHIFT, VirtualKeyCode::Tab)) {
+   match input.action((Modifier::SHIFT, Key::Named(NamedKey::Tab))) {
       (true, true) => {
          for element in fields.iter_mut().rev() {
             process_focus_change!(had_focus, element);

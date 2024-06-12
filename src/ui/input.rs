@@ -2,11 +2,14 @@
 
 use instant::Instant;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::ops::{BitAnd, BitOr};
 
 use crate::backend::winit::dpi::PhysicalPosition;
-pub use crate::backend::winit::event::{ElementState, MouseButton, VirtualKeyCode};
-use crate::backend::winit::event::{KeyboardInput, WindowEvent};
+pub use crate::backend::winit::event::{ElementState, MouseButton};
+use crate::backend::winit::event::{KeyEvent, WindowEvent};
+use crate::backend::winit::keyboard::{Key, ModifiersState};
+use crate::backend::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use crate::backend::winit::window::{CursorIcon, Window};
 use netcanv_renderer::paws::{point, vector, Point, Vector};
 use serde::de::Visitor;
@@ -14,7 +17,6 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 
 const MOUSE_BUTTON_COUNT: usize = 8;
-const KEY_CODE_COUNT: usize = 256;
 
 /// Input state.
 pub struct Input {
@@ -37,8 +39,9 @@ pub struct Input {
    // keyboard input
    char_buffer: Vec<char>,
 
-   key_just_typed: [bool; KEY_CODE_COUNT],
-   key_is_down: [bool; KEY_CODE_COUNT],
+   key_just_typed: HashSet<Key>,
+   key_is_down: HashSet<Key>,
+   modifiers: ModifiersState,
 
    // time
    time_origin: Instant,
@@ -64,8 +67,9 @@ impl Input {
          cursor: CursorIcon::Default,
 
          char_buffer: Vec::new(),
-         key_just_typed: [false; KEY_CODE_COUNT],
-         key_is_down: [false; KEY_CODE_COUNT],
+         key_just_typed: HashSet::new(),
+         key_is_down: HashSet::new(),
+         modifiers: ModifiersState::default(),
 
          time_origin: Instant::now(),
       }
@@ -170,31 +174,18 @@ impl Input {
    }
 
    /// Returns whether the provided key was just typed.
-   pub fn key_just_typed(&self, key: VirtualKeyCode) -> bool {
-      if let Some(i) = Self::key_index(key) {
-         self.key_just_typed[i]
-      } else {
-         false
-      }
-   }
-
-   /// Returns wheter the provided key is down
-   pub fn key_is_down(&self, key: VirtualKeyCode) -> bool {
-      if let Some(i) = Self::key_index(key) {
-         self.key_is_down[i]
-      } else {
-         false
-      }
+   pub fn key_just_typed(&self, key: Key) -> bool {
+      self.key_just_typed.contains(&key)
    }
 
    /// Returns whether the Ctrl key is being held down.
    pub fn ctrl_is_down(&self) -> bool {
-      self.key_is_down(VirtualKeyCode::LControl) || self.key_is_down(VirtualKeyCode::RControl)
+      self.modifiers.control_key()
    }
 
    /// Returns whether the Shift key is being held down.
    pub fn shift_is_down(&self) -> bool {
-      self.key_is_down(VirtualKeyCode::LShift) || self.key_is_down(VirtualKeyCode::RShift)
+      self.modifiers.shift_key()
    }
 
    /// Returns the time elapsed since this `Input` was created, in seconds.
@@ -235,17 +226,22 @@ impl Input {
             }
          }
 
-         WindowEvent::ReceivedCharacter(c) => self.char_buffer.push(*c),
+         WindowEvent::ModifiersChanged(new) => {
+            self.modifiers = new.state();
+         }
 
-         WindowEvent::KeyboardInput {
-            input:
-               KeyboardInput {
-                  state,
-                  virtual_keycode: Some(key),
-                  ..
-               },
-            ..
-         } => self.process_keyboard_input(*key, *state),
+         WindowEvent::KeyboardInput { event, .. } => {
+            let KeyEvent { state, text, .. } = event;
+
+            if *state == ElementState::Pressed {
+               if let Some(text) = text {
+                  let chars: Vec<char> = text.chars().collect();
+                  self.char_buffer.extend_from_slice(&chars);
+               }
+            }
+
+            self.process_keyboard_input(event.key_without_modifiers(), *state)
+         }
 
          _ => (),
       }
@@ -268,9 +264,7 @@ impl Input {
          self.previous_cursor = self.cursor;
          window.set_cursor_icon(self.cursor);
       }
-      for state in &mut self.key_just_typed {
-         *state = false;
-      }
+      self.key_just_typed.clear();
       self.char_buffer.clear();
    }
 
@@ -282,6 +276,7 @@ impl Input {
          MouseButton::Right => 1,
          MouseButton::Middle => 2,
          MouseButton::Other(x) => 3 + x as usize,
+         MouseButton::Back | MouseButton::Forward => 99, // we don't care about those
       };
 
       if i < MOUSE_BUTTON_COUNT {
@@ -308,27 +303,15 @@ impl Input {
       }
    }
 
-   /// Returns the numeric index of the key code, or `None` if the key code is not supported.
-   fn key_index(key: VirtualKeyCode) -> Option<usize> {
-      let i = key as usize;
-      if i < KEY_CODE_COUNT {
-         Some(i)
-      } else {
-         None
-      }
-   }
-
    /// Processes a keyboard input event.
-   fn process_keyboard_input(&mut self, key: VirtualKeyCode, state: ElementState) {
-      if let Some(i) = Self::key_index(key) {
-         if state == ElementState::Pressed {
-            self.key_just_typed[i] = true;
-            self.key_is_down[i] = true;
-         }
+   fn process_keyboard_input(&mut self, key: Key, state: ElementState) {
+      if state == ElementState::Pressed {
+         self.key_just_typed.insert(key.clone());
+         self.key_is_down.insert(key.clone());
+      }
 
-         if state == ElementState::Released {
-            self.key_is_down[i] = false;
-         }
+      if state == ElementState::Released {
+         self.key_is_down.remove(&key);
       }
    }
 }
@@ -376,11 +359,11 @@ impl BasicAction for MouseButton {
    }
 }
 
-impl BasicAction for VirtualKeyCode {
+impl BasicAction for Key {
    type Result = bool;
 
    fn check(&self, input: &Input) -> Self::Result {
-      input.key_just_typed(*self)
+      input.key_just_typed(self.clone())
    }
 }
 
@@ -560,6 +543,18 @@ where
 
    fn check(&self, input: &Input) -> Self::Result {
       (Modifier::from_input(input) == self.0, self.1.check(input))
+   }
+}
+
+impl<A> Action for &(Modifier, A)
+where
+   A: BasicAction,
+{
+   /// See the other implementation.
+   type Result = (bool, A::Result);
+
+   fn check(&self, input: &Input) -> Self::Result {
+      (*self).check(input)
    }
 }
 

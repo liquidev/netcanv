@@ -40,7 +40,7 @@ impl Tool for EyedropperTool {
    }
 
    fn key_shortcut(&self) -> KeyBinding {
-      config().keymap.tools.eyedropper
+      config().keymap.tools.eyedropper.clone()
    }
 
    fn process_paint_canvas_input(

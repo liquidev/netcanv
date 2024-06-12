@@ -1,12 +1,12 @@
 //! Keyboard shortcut mappings.
 
-use crate::backend::winit::event::VirtualKeyCode;
+use crate::backend::winit::keyboard::{Key, NamedKey};
 use serde::{Deserialize, Serialize};
 
 use crate::ui::Modifier;
 
 /// A key binding with a modifier.
-pub type KeyBinding = (Modifier, VirtualKeyCode);
+pub type KeyBinding = (Modifier, Key);
 
 /// The key map.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -38,9 +38,9 @@ pub struct ToolKeymap {
 impl Default for ToolKeymap {
    fn default() -> Self {
       Self {
-         selection: (Modifier::NONE, VirtualKeyCode::Key1),
-         brush: (Modifier::NONE, VirtualKeyCode::Key2),
-         eyedropper: (Modifier::NONE, VirtualKeyCode::Key3),
+         selection: (Modifier::NONE, Key::Character("1".into())),
+         brush: (Modifier::NONE, Key::Character("2".into())),
+         eyedropper: (Modifier::NONE, Key::Character("3".into())),
       }
    }
 }
@@ -56,16 +56,16 @@ impl Default for Keymap {
    fn default() -> Self {
       Self {
          edit: EditKeymap {
-            copy: (Modifier::CTRL, VirtualKeyCode::C),
-            cut: (Modifier::CTRL, VirtualKeyCode::X),
-            paste: (Modifier::CTRL, VirtualKeyCode::V),
-            delete: (Modifier::NONE, VirtualKeyCode::Delete),
-            select_all: (Modifier::CTRL, VirtualKeyCode::A),
+            copy: (Modifier::CTRL, Key::Character("c".into())),
+            cut: (Modifier::CTRL, Key::Character("x".into())),
+            paste: (Modifier::CTRL, Key::Character("v".into())),
+            delete: (Modifier::NONE, Key::Named(NamedKey::Delete)),
+            select_all: (Modifier::CTRL, Key::Character("a".into())),
          },
          tools: Default::default(),
          brush: BrushKeymap {
-            decrease_thickness: (Modifier::NONE, VirtualKeyCode::LBracket),
-            increase_thickness: (Modifier::NONE, VirtualKeyCode::RBracket),
+            decrease_thickness: (Modifier::NONE, Key::Character("[".into())),
+            increase_thickness: (Modifier::NONE, Key::Character("]".into())),
          },
       }
    }

@@ -169,7 +169,7 @@ impl Tool for BrushTool {
    }
 
    fn key_shortcut(&self) -> KeyBinding {
-      config().keymap.tools.brush
+      config().keymap.tools.brush.clone()
    }
 
    /// Handles input and drawing to the paint canvas with the brush.
@@ -222,10 +222,10 @@ impl Tool for BrushTool {
          thickness_change += scroll.y * 2.0;
       }
 
-      if input.action(config().keymap.brush.decrease_thickness) == (true, true) {
+      if input.action(&config().keymap.brush.decrease_thickness) == (true, true) {
          thickness_change -= 2.0;
       }
-      if input.action(config().keymap.brush.increase_thickness) == (true, true) {
+      if input.action(&config().keymap.brush.increase_thickness) == (true, true) {
          thickness_change += 2.0;
       }
 
